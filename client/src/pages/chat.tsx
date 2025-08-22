@@ -15,7 +15,10 @@ export default function Chat() {
   const [showUsernameDialog, setShowUsernameDialog] = useState(!username);
   const [messageInput, setMessageInput] = useState("");
   const [tempUsername, setTempUsername] = useState("");
+  const [previousMessageCount, setPreviousMessageCount] = useState(0);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -34,6 +37,10 @@ export default function Chat() {
     onSuccess: () => {
       setMessageInput("");
       queryClient.invalidateQueries({ queryKey: ["/api/messages"] });
+      // Auto-focus the input after sending message
+      setTimeout(() => {
+        messageInputRef.current?.focus();
+      }, 100);
     },
     onError: (error: any) => {
       toast({
@@ -44,10 +51,53 @@ export default function Chat() {
     },
   });
 
+  // Request notification permission
+  useEffect(() => {
+    if ('Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().then((permission) => {
+          setNotificationPermission(permission);
+        });
+      } else {
+        setNotificationPermission(Notification.permission);
+      }
+    }
+  }, []);
+
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Handle notifications for new messages
+  useEffect(() => {
+    if (messages.length > 0 && previousMessageCount > 0) {
+      const newMessages = messages.slice(previousMessageCount);
+      const newMessagesFromOthers = newMessages.filter(msg => msg.username !== username);
+      
+      if (newMessagesFromOthers.length > 0 && 
+          notificationPermission === 'granted' && 
+          document.hidden) {
+        const latestMessage = newMessagesFromOthers[newMessagesFromOthers.length - 1];
+        const notification = new Notification(`New message from ${latestMessage.username}`, {
+          body: latestMessage.content,
+          icon: '/favicon.ico',
+          tag: 'chat-message'
+        });
+        
+        // Auto-close notification after 4 seconds
+        setTimeout(() => notification.close(), 4000);
+        
+        // Focus window when notification is clicked
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
+      }
+    }
+    
+    setPreviousMessageCount(messages.length);
+  }, [messages, username, notificationPermission, previousMessageCount]);
 
   const handleUsernameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -244,6 +294,7 @@ export default function Chat() {
         <form onSubmit={handleSendMessage} className="flex space-x-3">
           <div className="flex-1 relative">
             <Input
+              ref={messageInputRef}
               type="text"
               placeholder="Type a message..."
               value={messageInput}
@@ -253,6 +304,7 @@ export default function Chat() {
               className="pr-12 rounded-full"
               disabled={sendMessageMutation.isPending}
               data-testid="input-message"
+              autoFocus
             />
             <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
               <span
