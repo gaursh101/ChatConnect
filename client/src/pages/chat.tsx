@@ -37,10 +37,6 @@ export default function Chat() {
     onSuccess: () => {
       setMessageInput("");
       queryClient.invalidateQueries({ queryKey: ["/api/messages"] });
-      // Auto-focus the input after sending message
-      setTimeout(() => {
-        messageInputRef.current?.focus();
-      }, 100);
     },
     onError: (error: any) => {
       toast({
@@ -63,6 +59,19 @@ export default function Chat() {
       }
     }
   }, []);
+
+  // Auto-focus input after successful message send
+  useEffect(() => {
+    if (!sendMessageMutation.isPending && messageInput === "" && !showUsernameDialog) {
+      // Small delay to ensure DOM updates are complete
+      const focusTimer = setTimeout(() => {
+        if (messageInputRef.current && document.activeElement !== messageInputRef.current) {
+          messageInputRef.current.focus();
+        }
+      }, 150);
+      return () => clearTimeout(focusTimer);
+    }
+  }, [sendMessageMutation.isPending, messageInput, showUsernameDialog]);
 
   // Auto-scroll to bottom
   useEffect(() => {
