@@ -7,6 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { TypingIndicator } from "@/components/typing-indicator";
 import { MessageCircle, Send, Users, Wifi } from "lucide-react";
 import type { Message } from "@shared/schema";
 
@@ -17,6 +19,7 @@ export default function Chat() {
   const [tempUsername, setTempUsername] = useState("");
   const [previousMessageCount, setPreviousMessageCount] = useState(0);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
+  const [typingTimeout, setTypingTimeout] = useState<NodeJS.Timeout | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
@@ -99,6 +102,36 @@ export default function Chat() {
     setPreviousMessageCount(messages.length);
   }, [messages, username, notificationPermission, previousMessageCount]);
 
+  // Handle typing indicator
+  const updateTypingStatus = async () => {
+    if (!username) return;
+    
+    try {
+      await apiRequest("POST", "/api/typing", { username });
+    } catch (error) {
+      // Silently fail for typing indicator
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setMessageInput(e.target.value);
+    
+    // Update typing status
+    updateTypingStatus();
+    
+    // Clear existing timeout
+    if (typingTimeout) {
+      clearTimeout(typingTimeout);
+    }
+    
+    // Set new timeout to stop typing indicator after 3 seconds of inactivity
+    const timeout = setTimeout(() => {
+      // Typing will naturally expire on server after 3 seconds
+    }, 3000);
+    
+    setTypingTimeout(timeout);
+  };
+
   const handleUsernameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (tempUsername.trim().length >= 2) {
@@ -159,7 +192,7 @@ export default function Chat() {
   const uniqueUsers = new Set(messages.map((m) => m.username)).size;
 
   return (
-    <div className="flex flex-col h-screen max-w-4xl mx-auto bg-white shadow-lg">
+    <div className="flex flex-col h-screen max-w-4xl mx-auto bg-white dark:bg-gray-900 shadow-lg transition-colors">
       {/* Username Selection Dialog */}
       <Dialog open={showUsernameDialog} onOpenChange={() => {}}>
         <DialogContent className="sm:max-w-md" data-testid="dialog-username">
@@ -209,6 +242,7 @@ export default function Chat() {
         </div>
 
         <div className="flex items-center space-x-2">
+          <ThemeToggle />
           <div className="flex items-center space-x-1">
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
             <span className="text-xs text-white/90">Connected</span>
@@ -225,11 +259,11 @@ export default function Chat() {
         <div className="h-full overflow-y-auto px-4 py-4 space-y-4" data-testid="container-messages">
           {isLoading ? (
             <div className="flex justify-center">
-              <div className="text-gray-500">Loading messages...</div>
+              <div className="text-gray-500 dark:text-gray-400">Loading messages...</div>
             </div>
           ) : messages.length === 0 ? (
             <div className="flex justify-center">
-              <div className="bg-gray-100 text-gray-600 text-xs px-3 py-1 rounded-full">
+              <div className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-xs px-3 py-1 rounded-full transition-colors">
                 Welcome to the chat room! Start the conversation.
               </div>
             </div>
@@ -257,27 +291,27 @@ export default function Chat() {
                         isCurrentUser ? "flex-row-reverse" : ""
                       }`}
                     >
-                      <span className="font-medium text-gray-900 text-sm" data-testid={`text-username-${message.id}`}>
+                      <span className="font-medium text-gray-900 dark:text-gray-100 text-sm transition-colors" data-testid={`text-username-${message.id}`}>
                         {isCurrentUser ? "You" : message.username}
                       </span>
-                      <span className="text-xs text-gray-500" data-testid={`text-timestamp-${message.id}`}>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 transition-colors" data-testid={`text-timestamp-${message.id}`}>
                         {formatTime(message.timestamp.toString())}
                       </span>
                     </div>
                     <div
-                      className={`mt-1 rounded-lg px-3 py-2 inline-block max-w-xs md:max-w-md ${
+                      className={`mt-1 rounded-lg px-3 py-2 inline-block max-w-xs md:max-w-md transition-colors ${
                         isCurrentUser
                           ? "bg-primary text-white"
-                          : "bg-gray-100"
+                          : "bg-gray-100 dark:bg-gray-800"
                       }`}
                     >
-                      <p className={`text-sm ${isCurrentUser ? "text-white" : "text-gray-800"}`} data-testid={`text-content-${message.id}`}>
+                      <p className={`text-sm transition-colors ${isCurrentUser ? "text-white" : "text-gray-800 dark:text-gray-200"}`} data-testid={`text-content-${message.id}`}>
                         {message.content}
                       </p>
                     </div>
                     {isCurrentUser && (
                       <div className="flex items-center space-x-1 mt-1">
-                        <span className="text-xs text-gray-400">Delivered</span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500 transition-colors">Delivered</span>
                       </div>
                     )}
                   </div>
@@ -290,7 +324,7 @@ export default function Chat() {
       </div>
 
       {/* Message Input */}
-      <div className="border-t border-gray-200 p-4" data-testid="container-message-input">
+      <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-900 transition-colors" data-testid="container-message-input">
         <form onSubmit={handleSendMessage} className="flex space-x-3">
           <div className="flex-1 relative">
             <Input
@@ -298,7 +332,7 @@ export default function Chat() {
               type="text"
               placeholder="Type a message..."
               value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
+              onChange={handleInputChange}
               onKeyPress={handleKeyPress}
               maxLength={500}
               className="pr-12 rounded-full"
@@ -330,12 +364,15 @@ export default function Chat() {
         </form>
 
         {sendMessageMutation.isPending && (
-          <div className="mt-2 text-sm text-gray-500 flex items-center" data-testid="status-sending">
-            <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin mr-2"></div>
+          <div className="mt-2 text-sm text-gray-500 dark:text-gray-400 flex items-center transition-colors" data-testid="status-sending">
+            <div className="w-4 h-4 border-2 border-gray-300 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin mr-2"></div>
             Sending message...
           </div>
         )}
       </div>
+      
+      {/* Typing Indicator */}
+      <TypingIndicator currentUsername={username} />
     </div>
   );
 }
