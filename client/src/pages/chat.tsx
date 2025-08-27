@@ -37,6 +37,10 @@ export default function Chat() {
     onSuccess: () => {
       setMessageInput("");
       queryClient.invalidateQueries({ queryKey: ["/api/messages"] });
+      // Auto-focus the input after sending message
+      setTimeout(() => {
+        messageInputRef.current?.focus();
+      }, 100);
     },
     onError: (error: any) => {
       toast({
@@ -60,19 +64,6 @@ export default function Chat() {
     }
   }, []);
 
-  // Auto-focus input after successful message send
-  useEffect(() => {
-    if (!sendMessageMutation.isPending && messageInput === "" && !showUsernameDialog) {
-      // Small delay to ensure DOM updates are complete
-      const focusTimer = setTimeout(() => {
-        if (messageInputRef.current && document.activeElement !== messageInputRef.current) {
-          messageInputRef.current.focus();
-        }
-      }, 150);
-      return () => clearTimeout(focusTimer);
-    }
-  }, [sendMessageMutation.isPending, messageInput, showUsernameDialog]);
-
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -84,53 +75,24 @@ export default function Chat() {
       const newMessages = messages.slice(previousMessageCount);
       const newMessagesFromOthers = newMessages.filter(msg => msg.username !== username);
       
-      if (newMessagesFromOthers.length > 0) {
-        console.log('New messages from others:', newMessagesFromOthers);
-        console.log('Notification permission:', notificationPermission);
-        console.log('Document hidden:', document.hidden);
+      if (newMessagesFromOthers.length > 0 && 
+          notificationPermission === 'granted' && 
+          document.hidden) {
+        const latestMessage = newMessagesFromOthers[newMessagesFromOthers.length - 1];
+        const notification = new Notification(`New message from ${latestMessage.username}`, {
+          body: latestMessage.content,
+          icon: '/favicon.ico',
+          tag: 'chat-message'
+        });
         
-        // Show notification if permission is granted
-        if (notificationPermission === 'granted') {
-          const latestMessage = newMessagesFromOthers[newMessagesFromOthers.length - 1];
-          
-          try {
-            const notification = new Notification(`New message from ${latestMessage.username}`, {
-              body: latestMessage.content,
-              icon: '/favicon.ico',
-              tag: 'chat-message',
-              requireInteraction: false
-            });
-            
-            // Auto-close notification after 4 seconds
-            setTimeout(() => {
-              try {
-                notification.close();
-              } catch (e) {
-                console.log('Error closing notification:', e);
-              }
-            }, 4000);
-            
-            // Focus window when notification is clicked
-            notification.onclick = () => {
-              window.focus();
-              try {
-                notification.close();
-              } catch (e) {
-                console.log('Error closing notification on click:', e);
-              }
-            };
-            
-            console.log('Notification created successfully');
-          } catch (error) {
-            console.error('Failed to create notification:', error);
-          }
-        } else if (notificationPermission === 'default') {
-          // Try to request permission again
-          Notification.requestPermission().then((permission) => {
-            setNotificationPermission(permission);
-            console.log('Permission requested, result:', permission);
-          });
-        }
+        // Auto-close notification after 4 seconds
+        setTimeout(() => notification.close(), 4000);
+        
+        // Focus window when notification is clicked
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
       }
     }
     
@@ -193,44 +155,6 @@ export default function Chat() {
     });
   };
 
-  // Test notification function
-  const testNotification = () => {
-    if ('Notification' in window) {
-      if (Notification.permission === 'granted') {
-        try {
-          const notification = new Notification('Test Notification', {
-            body: 'This is a test notification to check if notifications work!',
-            icon: '/favicon.ico',
-            tag: 'test-notification'
-          });
-          
-          setTimeout(() => {
-            try {
-              notification.close();
-            } catch (e) {
-              console.log('Error closing test notification:', e);
-            }
-          }, 3000);
-          
-          console.log('Test notification created');
-        } catch (error) {
-          console.error('Test notification failed:', error);
-        }
-      } else if (Notification.permission === 'default') {
-        Notification.requestPermission().then((permission) => {
-          setNotificationPermission(permission);
-          if (permission === 'granted') {
-            testNotification(); // Try again after permission granted
-          }
-        });
-      } else {
-        alert('Notifications are blocked. Please enable them in your browser settings.');
-      }
-    } else {
-      alert('Notifications are not supported by your browser.');
-    }
-  };
-
   // Get unique users count
   const uniqueUsers = new Set(messages.map((m) => m.username)).size;
 
@@ -285,13 +209,6 @@ export default function Chat() {
         </div>
 
         <div className="flex items-center space-x-2">
-          <button
-            onClick={testNotification}
-            className="text-xs text-white/70 hover:text-white transition-colors"
-            title="Test notifications"
-          >
-            🔔
-          </button>
           <div className="flex items-center space-x-1">
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
             <span className="text-xs text-white/90">Connected</span>

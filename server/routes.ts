@@ -38,11 +38,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid message data" });
       }
-      console.error("Database error:", error);
-      res.status(500).json({ 
-        message: "Failed to create message", 
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined 
-      });
+      res.status(500).json({ message: "Failed to create message" });
     }
   });
 
